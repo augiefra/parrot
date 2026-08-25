@@ -8,31 +8,12 @@ import Foundation
 enum ModelRegistry {
     static let shared: [TranscriptionModel] = [
         TranscriptionModel(
-            id: "whisper-base.en",
-            displayName: "Whisper Base (English)",
-            engine: .whisperKit,
-            whisperKitID: "openai_whisper-base.en",
-            sizeMB: 145,
-            languages: ["en"],
+            id: "canary-1b-v2-mlx-bf16",
+            displayName: "Canary 1B v2 MLX",
+            engine: .canaryMLX,
+            sizeMB: 3210,
+            languages: ["fr"],
             recommended: true
-        ),
-        TranscriptionModel(
-            id: "whisper-large-v3-turbo",
-            displayName: "Whisper Large v3 Turbo",
-            engine: .whisperKit,
-            whisperKitID: "openai_whisper-large-v3-v20240930_turbo",
-            sizeMB: 1620,
-            languages: ["multi"],
-            recommended: false
-        ),
-        TranscriptionModel(
-            id: "whisper-small.en",
-            displayName: "Whisper Small (English)",
-            engine: .whisperKit,
-            whisperKitID: "openai_whisper-small.en",
-            sizeMB: 488,
-            languages: ["en"],
-            recommended: false
         ),
     ]
 

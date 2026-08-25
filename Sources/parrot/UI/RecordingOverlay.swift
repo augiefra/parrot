@@ -8,13 +8,17 @@ final class RecordingOverlay {
     enum State: Equatable {
         case hidden
         case recording
+        case locked
         case transcribing
     }
 
     private var window: NSPanel?
+    private var pendingHide: DispatchWorkItem?
     private let model = OverlayModel()
 
     func show(_ state: State) {
+        pendingHide?.cancel()
+        pendingHide = nil
         ensureWindow()
         if state == .recording {
             model.resetLevels()
@@ -35,13 +39,17 @@ final class RecordingOverlay {
     }
 
     func hide() {
+        pendingHide?.cancel()
         model.state = .hidden
         // Let the SwiftUI scale+fade animation play out before yanking the
         // window — otherwise it just pops away.
         let window = self.window
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+        let workItem = DispatchWorkItem { [weak self] in
             window?.orderOut(nil)
+            self?.pendingHide = nil
         }
+        pendingHide = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: workItem)
     }
 
     /// Push a new audio level (0…~1). Safe to call from any thread.
@@ -54,7 +62,7 @@ final class RecordingOverlay {
     private func ensureWindow() {
         if window != nil { return }
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 96, height: 44),
+            contentRect: NSRect(x: 0, y: 0, width: 112, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -122,7 +130,11 @@ private struct OverlayPill: View {
             .padding(.vertical, 9)
             .background(
                 Capsule()
-                    .fill(Color(red: 16/255, green: 18/255, blue: 18/255))
+                    .fill(model.state == .transcribing
+                        ? Color.black
+                        : Color(red: 16/255, green: 18/255, blue: 18/255)
+                    )
+                    .animation(.easeOut(duration: 0.12), value: model.state)
             )
             .scaleEffect(model.state == .hidden ? 0 : 1)
             .animation(
@@ -137,10 +149,20 @@ private struct OverlayPill: View {
         case .hidden, .recording:
             Waveform(levels: model.levels)
                 .frame(width: 54, height: 22)
+        case .locked:
+            HStack(spacing: 7) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color(red: 181/255.0, green: 209/255.0, blue: 255/255.0))
+                Waveform(levels: model.levels)
+                    .frame(width: 54, height: 22)
+            }
+            .frame(width: 72, height: 22)
         case .transcribing:
             ProgressView()
-                .controlSize(.small)
-                .scaleEffect(0.8)
+                .controlSize(.regular)
+                .tint(.white)
+                .scaleEffect(0.9)
                 .frame(width: 54, height: 22)
         }
     }

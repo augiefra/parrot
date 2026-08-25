@@ -1,59 +1,80 @@
-# parrot
+# Parrot
 
-A minimal macOS dictation daemon. Push-to-talk, on-device transcription, text inserted at the cursor.
+Parrot est une dictée macOS locale : maintenir `Fn`, parler, relâcher ; le
+texte est inséré au curseur. Le produit actif cible Apple Silicon et utilise
+**Canary 1B v2 MLX** en français, sans transcription cloud.
 
-## Install
+## Usage
 
-```sh
-curl -fsSL https://digimata.github.io/parrot/install.sh | sh
-parrot setup                       # grants mic + accessibility, downloads the model
-parrot install --launch-at-login   # optional — runs in the background on login
+1. Placez le curseur dans le champ de texte voulu.
+2. Maintenez `Fn`, dictez, puis relâchez.
+3. Pour verrouiller la dictée mains libres, faites un double appui sur `Fn`,
+   puis un dernier appui pour arrêter.
+
+Pendant l'enregistrement, Parrot mute temporairement la sortie audio active et
+la restaure à l'arrêt, à l'erreur ou à la fermeture. La bulle waveform indique
+l'écoute ; après le relâchement elle devient noire avec un spinner pendant la
+transcription, puis disparaît lorsque le texte est injecté.
+
+## Dictée fidèle
+
+Parrot privilégie la fidélité : Canary fournit le texte, puis le dictionnaire
+local applique des corrections déterministes. Il ne rédige pas de réponse,
+message, e-mail, titre ou paragraphe à partir de ce que vous venez de dicter.
+
+Une seule exception de présentation existe : une liste explicitement dictée et
+séquentielle, par exemple `petit 1`, `petit 2`, `petit 3`, est rendue comme une
+vraie liste numérotée. Une référence ordinaire telle que « point 12 puis point
+15 » reste du texte normal.
+
+## Dictionnaire local
+
+Le dictionnaire est stocké dans `~/.config/parrot/dictionary.json`. Il est
+rechargé à chaque dictée et ne quitte jamais le Mac. Il corrige notamment les
+orthographes métier telles que FacilAbo, Codex, ChatGPT et TARS.
+
+Ajoutez une correction depuis le menu waveform avec **Add dictionary
+correction…**, ou modifiez directement le JSON.
+
+## Modèle et runtime
+
+Le seul modèle actif est `canary-1b-v2-mlx-bf16`, conversion MLX locale de
+Canary 1B v2. Le runtime persistant se situe dans :
+
+```text
+~/Library/Application Support/parrot/canary-mlx
 ```
 
-**Requires:** macOS 14+ on Apple Silicon (M1 or newer). Transcription runs on the Apple Neural Engine via CoreML — so the installer refuses to run on Intel.
+Le worker MLX charge le modèle une fois, puis reçoit les captures WAV temporaires
+à transcrire. Il force `source_lang="fr"`, `target_lang="fr"` et active la
+ponctuation/capitalisation native. Les captures longues sont découpées en
+fenêtres de 30 secondes afin d'éviter les boucles de décodage connues du runtime
+MLX actuel.
 
-The installer drops the binary in `/usr/local/bin/parrot`. Builds are unsigned for now, so the installer strips the quarantine xattr — once you've inspected the script you'll see exactly what it does.
-
-## How to use
-
-1. **Run it.** Either `parrot install --launch-at-login` (daemonized, runs forever, lives in the menu bar), or `parrot` in any terminal tab.
-2. **Click into the text field you want to dictate into** — Messages, the address bar, a Slack thread, anywhere a cursor blinks.
-3. **Hold the `fn` key, speak, release.** A small pill appears at the bottom of the screen while the mic is hot.
-4. **The transcript types itself in at the cursor** when you release. Usually within 200-300ms.
-
-That's it. There is no record button, no stop button, no "send" — `fn` is the whole interface.
-
-> **Note:** on most modern Macs the `fn` key is the bottom-left key. If yours is set to "Change input source" or "Show emoji & symbols," `parrot setup` will tell you how to flip it back to plain `fn`.
+Whisper, le sous-titrage SRT et le rendu vidéo sont conservés dans le dépôt comme
+matériel de retour arrière, mais ils ne font pas partie de la cible compilée ni
+du menu actuel.
 
 ## CLI
 
 ```sh
-parrot                                 # run in the foreground (^C to quit)
-parrot setup                           # one-time setup: permissions + model download
-parrot install --launch-at-login       # register a LaunchAgent (background daemon)
-parrot install --uninstall             # remove the LaunchAgent
-parrot doctor                          # check permissions + fn key setting
-parrot models list                     # list available models
-parrot models download <id>            # pre-download a model
-parrot --model whisper-large-v3-turbo  # bigger, multilingual, slower first-run
-parrot --hotkey right-option           # change the push-to-talk key
-parrot --no-overlay                    # disable the bottom-of-screen pill
+parrot                         # lance le daemon au premier plan
+parrot run --skip-doctor       # même lancement, permissions déjà vérifiées
+parrot doctor                  # vérifie Microphone, Accessibilité et Fn
+parrot models list             # affiche Canary et la présence du runtime local
+parrot setup                   # aide à configurer les permissions Fn
 ```
 
-## Stack
-
-- **Swift** — single SPM executable target
-- **WhisperKit** — Whisper inference via CoreML, ANE-accelerated
-- **AVAudioEngine** — mic capture
-- **CGEventTap** — global hotkey
-- **CGEvent** — text injection at cursor
-- **NSWindow** (borderless, click-through) — recording-indicator pill
-
-See [docs/architecture.md](docs/architecture.md) for design notes.
-
-## Build from source
+## Développement
 
 ```sh
+swift test
 swift build -c release
-.build/release/parrot --help
 ```
+
+Le bundle local signé utilisé sur cette machine est une installation privée ;
+son chemin stable et sa signature sont importants pour la persistance TCC. Les
+artefacts de rollback restent dans `.artifacts/` et sont volontairement ignorés
+par Git.
+
+Voir [l'architecture](docs/architecture.md) pour le flux de bout en bout.
